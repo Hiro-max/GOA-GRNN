@@ -1,8 +1,10 @@
-function MAE = Calc_MAE_GOA(x)
+function MAE = Calc_MAE_MGOA(x)
+
 
 % 对输入的数据处理
 input = x(:,2:end);
 output = x(:,1);
+
 
 j = 1;
 k = 1;
@@ -32,7 +34,7 @@ inputn_test = p_test';
 % outputn_test = t_test;
 
 % *****************GOA***************************** 
-N = 10;
+N = 30;
 max_iter = 30;
 lb = 0.05;
 ub = 2;
@@ -48,21 +50,29 @@ end
 
 if(rem(dim,2)~=0)
     dim = dim+1;
-    ub = [ub;3];
-    lb = [lb;-3];
+    ub = [ub;ub];
+    lb = [lb;-lb];
     flag = 1;
 end
 
 
 
-GrasshopperPositions = initialization_goa(N,dim,ub,lb);
+GrasshopperPositions1 = initialization_goa(N,dim,ub,lb);
+%     GrasshopperPositions2 = (GrasshopperPositions1-min(GrasshopperPositions1))./(max(GrasshopperPositions1)-min(GrasshopperPositions1));
+
+%增加Logistic映射
+GrasshopperPositions=4*GrasshopperPositions1.*(1-GrasshopperPositions1);
+
+for i=1:size(GrasshopperPositions,1)
+    Tp=GrasshopperPositions(i,:)>ub';Tm=GrasshopperPositions(i,:)<lb';GrasshopperPositions(i,:)=(GrasshopperPositions(i,:).*(~(Tp+Tm)))+ub'.*Tp+lb'.*Tm;
+end
 GrasshopperFitness = zeros(1,N);
 Sorted_grasshopper = zeros(10,2);
 GrasshopperPositions_temp = zeros(10,2);
 
 fitness_history = zeros(N,max_iter);
 position_history = zeros(N,max_iter,dim);
-Convergence_curve = zeros(1,max_iter);
+%     Convergence_curve = zeros(1,max_iter);
 Trajectories = zeros(N,max_iter);
 
 for i=1:size(GrasshopperPositions,1)
@@ -84,14 +94,15 @@ for newindex=1:N
 end
 
 TargetPosition = Sorted_grasshopper(1,:);
+TargetPosition_2 = Sorted_grasshopper(2,:);
 TargetFitness = sorted_fitness(1);
 
 % disp(['第一次迭代','最优值为',num2str(TargetFitness)])
 
 l=2;
 while l<max_iter+1
-    c=cMax-l*((cMax-cMin)/max_iter);
 
+    c = cMax - (cMax-cMin)*(l/max_iter)^2;
     for i=1:size(GrasshopperPositions,1)
         temp = GrasshopperPositions';
         for k=1:2:dim
@@ -107,8 +118,16 @@ while l<max_iter+1
             end
             S_i_total(k:k+1,:)=S_i;
         end
+        mutation = rand;
         X_new = c*S_i_total'+(TargetPosition);
-        GrasshopperPositions_temp(i,:)=X_new';
+
+%             %加入变异
+        r1 = round(mutation);
+        if r1 == 0
+            GrasshopperPositions_temp(i,:)=X_new'+(ub-X_new').*(1-mutation^((1-l/max_iter)^2));
+        else 
+            GrasshopperPositions_temp(i,:)=X_new'-(X_new'-lb).*(1-mutation^((1-l/max_iter)^2));
+        end
     end
 
     GrasshopperPositions = GrasshopperPositions_temp;
@@ -129,8 +148,8 @@ while l<max_iter+1
             TargetFitness = GrasshopperFitness(1,i);
         end
     end
-    Convergence_curve(l) = TargetFitness;
-%         disp(['In iteration #',num2str(l),', target''s objective = ',num2str(TargetFitness)]);
+%     Convergence_curve(l) = TargetFitness;
+        disp(['In iteration #',num2str(l),', target''s objective = ',num2str(TargetFitness)]);
     l = l+1;
 end  
 
@@ -148,12 +167,9 @@ Euclidean_D = distance_mat(inputn',inputn_test');
 Guass_value = Guass(Euclidean_D,best_spread);
 sum_mat = sum_layer(Guass_value,outputn');
 output_mat_1 = output_layer(sum_mat);
-
+%     output_mat = output_mat_1';
 output_mat = mapminmax('reverse',output_mat_1',outputps);   
 
 MAE = sum(abs(output_mat-t_test'),2)/size(t_test',2);
-
-
-
-
 end
+
